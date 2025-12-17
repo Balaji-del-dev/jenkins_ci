@@ -14,7 +14,7 @@ pipeline {
                 // Clean folder before clone
                 sh """
                 mkdir -p $DEPLOY_PATH
-                sudo chown -R \$(whoami):\$(whoami) $DEPLOY_PATH
+                # Make sure Jenkins already owns this folder manually
                 """
             }
         }
