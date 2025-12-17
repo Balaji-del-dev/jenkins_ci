@@ -4,27 +4,25 @@ pipeline {
     environment {
         DEPLOY_PATH = "/home/bala-murugan/Downloads/myproject"
         VENV_PATH   = "venv"
-        DJANGO_PORT = "8000"
+        DJANGO_PORT = "8003"  // Updated port
     }
 
     stages {
 
         stage('Prepare Workspace') {
             steps {
-                // Clean folder before clone
+                // Make sure folder exists and Jenkins has permission
                 sh """
                 mkdir -p $DEPLOY_PATH
-                # Make sure Jenkins already owns this folder manually
                 """
             }
         }
 
         stage('Clone Repository') {
             steps {
-                dir("$DEPLOY_PATH") {
-                    // Delete old files
+                // Clone repo into Jenkins workspace, not directly into DEPLOY_PATH
+                dir("${WORKSPACE}/repo") {
                     deleteDir()
-                    // Clone GitHub repo
                     git branch: 'main',
                         url: 'https://github.com/Balaji-del-dev/jenkins_ci.git'
                 }
@@ -33,7 +31,7 @@ pipeline {
 
         stage('Setup Virtual Environment & Install Dependencies') {
             steps {
-                dir("$DEPLOY_PATH") {
+                dir("${WORKSPACE}/repo") {
                     sh """
                     # Create virtualenv safely
                     python3 -m venv $VENV_PATH
@@ -49,7 +47,7 @@ pipeline {
 
         stage('Run Django Tests') {
             steps {
-                dir("$DEPLOY_PATH") {
+                dir("${WORKSPACE}/repo") {
                     sh """
                     . $VENV_PATH/bin/activate
                     python manage.py test
@@ -61,6 +59,11 @@ pipeline {
         stage('Deploy to Local Path') {
             steps {
                 sh """
+                # Copy project files to your local folder
+                rsync -av --delete \
+                    --exclude $VENV_PATH \
+                    --exclude .git \
+                    ${WORKSPACE}/repo/ $DEPLOY_PATH/
                 echo "Deployment completed to $DEPLOY_PATH"
                 """
             }
@@ -70,7 +73,7 @@ pipeline {
             steps {
                 dir("$DEPLOY_PATH") {
                     sh """
-                    . $VENV_PATH/bin/activate
+                    . $VENV_PATH/bin/activate || true
 
                     # Kill previous server if running
                     pkill -f "manage.py runserver" || true
