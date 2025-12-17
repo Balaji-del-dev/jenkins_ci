@@ -4,14 +4,13 @@ pipeline {
     environment {
         DEPLOY_PATH = "/home/bala-murugan/Downloads/myproject"
         VENV_PATH   = "venv"
-        DJANGO_PORT = "8003"  // Updated port
+        DJANGO_PORT = "8003"
     }
 
     stages {
 
         stage('Prepare Workspace') {
             steps {
-                // Make sure folder exists and Jenkins has permission
                 sh """
                 mkdir -p $DEPLOY_PATH
                 """
@@ -20,7 +19,6 @@ pipeline {
 
         stage('Clone Repository') {
             steps {
-                // Clone repo into Jenkins workspace, not directly into DEPLOY_PATH
                 dir("${WORKSPACE}/repo") {
                     deleteDir()
                     git branch: 'main',
@@ -33,10 +31,7 @@ pipeline {
             steps {
                 dir("${WORKSPACE}/repo") {
                     sh """
-                    # Create virtualenv safely
                     python3 -m venv $VENV_PATH
-
-                    # Activate venv and upgrade pip
                     . $VENV_PATH/bin/activate
                     python -m pip install --upgrade pip
                     pip install -r requirements.txt
@@ -59,7 +54,7 @@ pipeline {
         stage('Deploy to Local Path') {
             steps {
                 sh """
-                # Copy project files to your local folder
+                # Copy files to local folder
                 rsync -av --delete \
                     --exclude $VENV_PATH \
                     --exclude .git \
@@ -69,18 +64,27 @@ pipeline {
             }
         }
 
-        stage('Run Django Server (Optional)') {
+        stage('Run Django Server') {
             steps {
                 dir("$DEPLOY_PATH") {
                     sh """
-                    . $VENV_PATH/bin/activate || true
+                    # Create virtualenv in deploy folder if missing
+                    if [ ! -d "$VENV_PATH" ]; then
+                        python3 -m venv $VENV_PATH
+                    fi
+
+                    . $VENV_PATH/bin/activate
+
+                    # Upgrade pip and install requirements
+                    python -m pip install --upgrade pip
+                    pip install -r requirements.txt
 
                     # Kill previous server if running
-                    pkill -f "manage.py runserver" || true
+                    pkill -f "manage.py runserver $DJANGO_PORT" || true
 
-                    # Start Django server in background
+                    # Start server on port 8003
                     nohup python manage.py runserver 0.0.0.0:$DJANGO_PORT > django.log 2>&1 &
-                    echo "Django server started at port $DJANGO_PORT"
+                    echo "Django server started on port $DJANGO_PORT"
                     """
                 }
             }
@@ -92,7 +96,7 @@ pipeline {
             echo "✅ CI/CD Pipeline completed successfully!"
         }
         failure {
-            echo "❌ Pipeline failed. Check logs for errors."
+            echo "❌ Pipeline failed. Check logs."
         }
     }
 }
